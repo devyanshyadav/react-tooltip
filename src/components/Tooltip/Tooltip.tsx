@@ -709,8 +709,8 @@ const Tooltip = ({
                */
               // the element has children which are anchors
               element
-                .querySelectorAll(selector)
-                .forEach((innerNode) => removedAnchors.add(innerNode as HTMLElement))
+                .querySelectorAll<HTMLElement>(selector)
+                .forEach((innerNode) => removedAnchors.add(innerNode))
             }
           })
         } catch {
@@ -736,8 +736,8 @@ const Tooltip = ({
                */
               // the element has children which are anchors
               element
-                .querySelectorAll(selector)
-                .forEach((innerNode) => addedAnchors.add(innerNode as HTMLElement))
+                .querySelectorAll<HTMLElement>(selector)
+                .forEach((innerNode) => addedAnchors.add(innerNode))
             }
           })
         } catch {
