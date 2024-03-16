@@ -31,7 +31,6 @@ const Tooltip = ({
   anchorSelect,
   place = 'top',
   offset = 10,
-  events = ['hover'],
   openOnClick = false,
   positionStrategy = 'absolute',
   middlewares,
@@ -42,9 +41,6 @@ const Tooltip = ({
   hidden = false,
   noArrow = false,
   clickable = false,
-  closeOnEsc = false,
-  closeOnScroll = false,
-  closeOnResize = false,
   openEvents,
   closeEvents,
   globalCloseEvents,
@@ -87,12 +83,8 @@ const Tooltip = ({
   const [anchorElements, setAnchorElements] = useState<HTMLElement[]>([])
   const mounted = useRef(false)
 
-  /**
-   * @todo Update when deprecated stuff gets removed.
-   */
-  const shouldOpenOnClick = openOnClick || events.includes('click')
   const hasClickEvent =
-    shouldOpenOnClick || openEvents?.click || openEvents?.dblclick || openEvents?.mousedown
+    openOnClick || openEvents?.click || openEvents?.dblclick || openEvents?.mousedown
   const actualOpenEvents: AnchorOpenEvents = openEvents
     ? { ...openEvents }
     : {
@@ -102,7 +94,7 @@ const Tooltip = ({
         dblclick: false,
         mousedown: false,
       }
-  if (!openEvents && shouldOpenOnClick) {
+  if (!openEvents && openOnClick) {
     Object.assign(actualOpenEvents, {
       mouseenter: false,
       focus: false,
@@ -118,7 +110,7 @@ const Tooltip = ({
         dblclick: false,
         mouseup: false,
       }
-  if (!closeEvents && shouldOpenOnClick) {
+  if (!closeEvents && openOnClick) {
     Object.assign(actualCloseEvents, {
       mouseleave: false,
       blur: false,
@@ -127,9 +119,9 @@ const Tooltip = ({
   const actualGlobalCloseEvents: GlobalCloseEvents = globalCloseEvents
     ? { ...globalCloseEvents }
     : {
-        escape: closeOnEsc || false,
-        scroll: closeOnScroll || false,
-        resize: closeOnResize || false,
+        escape: false,
+        scroll: false,
+        resize: false,
         clickOutsideAnchor: hasClickEvent || false,
       }
 
@@ -625,7 +617,7 @@ const Tooltip = ({
     openEvents,
     closeEvents,
     globalCloseEvents,
-    shouldOpenOnClick,
+    hasClickEvent,
     delayShow,
     delayHide,
   ])
