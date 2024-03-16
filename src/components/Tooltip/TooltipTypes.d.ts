@@ -115,11 +115,6 @@ export interface ITooltip {
   offset?: number
   id?: string
   variant?: VariantType
-  /**
-   * @deprecated Use the `data-tooltip-id` attribute, or the `anchorSelect` prop instead.
-   * See https://react-tooltip.com/docs/getting-started
-   */
-  anchorId?: string
   anchorSelect?: string
   wrapper: WrapperType
   /**
