@@ -83,71 +83,6 @@ const Tooltip = ({
   const [anchorElements, setAnchorElements] = useState<HTMLElement[]>([])
   const mounted = useRef(false)
 
-  const hasClickEvent =
-    openOnClick || openEvents?.click || openEvents?.dblclick || openEvents?.mousedown
-  const actualOpenEvents: AnchorOpenEvents = openEvents
-    ? { ...openEvents }
-    : {
-        mouseenter: true,
-        focus: true,
-        click: false,
-        dblclick: false,
-        mousedown: false,
-      }
-  if (!openEvents && openOnClick) {
-    Object.assign(actualOpenEvents, {
-      mouseenter: false,
-      focus: false,
-      click: true,
-    })
-  }
-  const actualCloseEvents: AnchorCloseEvents = closeEvents
-    ? { ...closeEvents }
-    : {
-        mouseleave: true,
-        blur: true,
-        click: false,
-        dblclick: false,
-        mouseup: false,
-      }
-  if (!closeEvents && openOnClick) {
-    Object.assign(actualCloseEvents, {
-      mouseleave: false,
-      blur: false,
-    })
-  }
-  const actualGlobalCloseEvents: GlobalCloseEvents = globalCloseEvents
-    ? { ...globalCloseEvents }
-    : {
-        escape: false,
-        scroll: false,
-        resize: false,
-        clickOutsideAnchor: hasClickEvent || false,
-      }
-
-  if (imperativeModeOnly) {
-    Object.assign(actualOpenEvents, {
-      mouseenter: false,
-      focus: false,
-      click: false,
-      dblclick: false,
-      mousedown: false,
-    })
-    Object.assign(actualCloseEvents, {
-      mouseleave: false,
-      blur: false,
-      click: false,
-      dblclick: false,
-      mouseup: false,
-    })
-    Object.assign(actualGlobalCloseEvents, {
-      escape: false,
-      scroll: false,
-      resize: false,
-      clickOutsideAnchor: false,
-    })
-  }
-
   /**
    * useLayoutEffect runs before useEffect,
    * but should be used carefully because of caveats
@@ -160,27 +95,30 @@ const Tooltip = ({
     }
   }, [])
 
-  const handleShow = (value: boolean) => {
-    if (!mounted.current) {
-      return
-    }
-    if (value) {
-      setRendered(true)
-    }
-    /**
-     * wait for the component to render and calculate position
-     * before actually showing
-     */
-    setTimeout(() => {
+  const handleShow = useCallback(
+    (value: boolean) => {
       if (!mounted.current) {
         return
       }
-      setIsOpen?.(value)
-      if (isOpen === undefined) {
-        setShow(value)
+      if (value) {
+        setRendered(true)
       }
-    }, 10)
-  }
+      /**
+       * wait for the component to render and calculate position
+       * before actually showing
+       */
+      setTimeout(() => {
+        if (!mounted.current) {
+          return
+        }
+        setIsOpen?.(value)
+        if (isOpen === undefined) {
+          setShow(value)
+        }
+      }, 10)
+    },
+    [isOpen, setIsOpen],
+  )
 
   /**
    * this replicates the effect from `handleShow()`
@@ -228,7 +166,7 @@ const Tooltip = ({
         // +25ms just to make sure `onTransitionEnd` (if it gets fired) has time to run
       }, transitionShowDelay + 25)
     }
-  }, [show])
+  }, [afterHide, afterShow, show])
 
   const handleComputedPosition = (newComputedPosition: IComputedPosition) => {
     setComputedPosition((oldComputedPosition) =>
@@ -238,154 +176,72 @@ const Tooltip = ({
     )
   }
 
-  const handleShowTooltipDelayed = (delay = delayShow) => {
-    if (tooltipShowDelayTimerRef.current) {
-      clearTimeout(tooltipShowDelayTimerRef.current)
-    }
+  const handleShowTooltipDelayed = useCallback(
+    (delay = delayShow) => {
+      if (tooltipShowDelayTimerRef.current) {
+        clearTimeout(tooltipShowDelayTimerRef.current)
+      }
 
-    if (rendered) {
-      // if the tooltip is already rendered, ignore delay
-      handleShow(true)
-      return
-    }
-
-    tooltipShowDelayTimerRef.current = setTimeout(() => {
-      handleShow(true)
-    }, delay)
-  }
-
-  const handleHideTooltipDelayed = (delay = delayHide) => {
-    if (tooltipHideDelayTimerRef.current) {
-      clearTimeout(tooltipHideDelayTimerRef.current)
-    }
-
-    tooltipHideDelayTimerRef.current = setTimeout(() => {
-      if (hoveringTooltip.current) {
+      if (rendered) {
+        // if the tooltip is already rendered, ignore delay
+        handleShow(true)
         return
       }
-      handleShow(false)
-    }, delay)
-  }
 
-  const handleShowTooltip = (event?: Event) => {
-    if (!event) {
-      return
-    }
-    const target = (event.currentTarget ?? event.target) as HTMLElement | null
-    if (!target?.isConnected) {
-      /**
-       * this happens when the target is removed from the DOM
-       * at the same time the tooltip gets triggered
-       */
-      setActiveAnchor(null)
-      return
-    }
-    if (delayShow) {
-      handleShowTooltipDelayed()
-    } else {
-      handleShow(true)
-    }
-    setActiveAnchor(target)
+      tooltipShowDelayTimerRef.current = setTimeout(() => {
+        handleShow(true)
+      }, delay)
+    },
+    [delayShow, handleShow, rendered],
+  )
 
-    if (tooltipHideDelayTimerRef.current) {
-      clearTimeout(tooltipHideDelayTimerRef.current)
-    }
-  }
+  const handleHideTooltipDelayed = useCallback(
+    (delay = delayHide) => {
+      if (tooltipHideDelayTimerRef.current) {
+        clearTimeout(tooltipHideDelayTimerRef.current)
+      }
 
-  const handleHideTooltip = () => {
-    if (clickable) {
-      // allow time for the mouse to reach the tooltip, in case there's a gap
-      handleHideTooltipDelayed(delayHide || 100)
-    } else if (delayHide) {
-      handleHideTooltipDelayed()
-    } else {
-      handleShow(false)
-    }
-
-    if (tooltipShowDelayTimerRef.current) {
-      clearTimeout(tooltipShowDelayTimerRef.current)
-    }
-  }
-
-  const handleTooltipPosition = ({ x, y }: IPosition) => {
-    const virtualElement = {
-      getBoundingClientRect() {
-        return {
-          x,
-          y,
-          width: 0,
-          height: 0,
-          top: y,
-          left: x,
-          right: x,
-          bottom: y,
+      tooltipHideDelayTimerRef.current = setTimeout(() => {
+        if (hoveringTooltip.current) {
+          return
         }
-      },
-    } as Element
-    computeTooltipPosition({
-      place: imperativeOptions?.place ?? place,
-      offset,
-      elementReference: virtualElement,
-      tooltipReference: tooltipRef.current,
-      tooltipArrowReference: tooltipArrowRef.current,
-      strategy: positionStrategy,
-      middlewares,
-      border,
-    }).then((computedStylesData) => {
-      handleComputedPosition(computedStylesData)
-    })
-  }
+        handleShow(false)
+      }, delay)
+    },
+    [delayHide, handleShow],
+  )
 
-  const handlePointerMove = (event?: Event) => {
-    if (!event) {
-      return
-    }
-    const mouseEvent = event as MouseEvent
-    const mousePosition = {
-      x: mouseEvent.clientX,
-      y: mouseEvent.clientY,
-    }
-    handleTooltipPosition(mousePosition)
-    lastFloatPosition.current = mousePosition
-  }
-
-  const handleClickOutsideAnchors = (event: MouseEvent) => {
-    if (!show) {
-      return
-    }
-    const target = event.target as HTMLElement
-    if (!target.isConnected) {
-      return
-    }
-    if (tooltipRef.current?.contains(target)) {
-      return
-    }
-    if (anchorElements.some((anchor) => anchor?.contains(target))) {
-      return
-    }
-    handleShow(false)
-    if (tooltipShowDelayTimerRef.current) {
-      clearTimeout(tooltipShowDelayTimerRef.current)
-    }
-  }
-
-  // debounce handler to prevent call twice when
-  // mouse enter and focus events being triggered toggether
-  const internalDebouncedHandleShowTooltip = debounce(handleShowTooltip, 50, true)
-  const internalDebouncedHandleHideTooltip = debounce(handleHideTooltip, 50, true)
-  // If either of the functions is called while the other is still debounced,
-  // reset the timeout. Otherwise if there is a sub-50ms (leave A, enter B, leave B)
-  // sequence of events, the tooltip will stay open because the hide debounce
-  // from leave A prevented the leave B event from calling it, leaving the
-  // tooltip visible.
-  const debouncedHandleShowTooltip = (e?: Event) => {
-    internalDebouncedHandleHideTooltip.cancel()
-    internalDebouncedHandleShowTooltip(e)
-  }
-  const debouncedHandleHideTooltip = () => {
-    internalDebouncedHandleShowTooltip.cancel()
-    internalDebouncedHandleHideTooltip()
-  }
+  const handleTooltipPosition = useCallback(
+    ({ x, y }: IPosition) => {
+      const virtualElement = {
+        getBoundingClientRect() {
+          return {
+            x,
+            y,
+            width: 0,
+            height: 0,
+            top: y,
+            left: x,
+            right: x,
+            bottom: y,
+          }
+        },
+      } as Element
+      computeTooltipPosition({
+        place: imperativeOptions?.place ?? place,
+        offset,
+        elementReference: virtualElement,
+        tooltipReference: tooltipRef.current,
+        tooltipArrowReference: tooltipArrowRef.current,
+        strategy: positionStrategy,
+        middlewares,
+        border,
+      }).then((computedStylesData) => {
+        handleComputedPosition(computedStylesData)
+      })
+    },
+    [imperativeOptions?.place, place, offset, positionStrategy, middlewares, border],
+  )
 
   const updateTooltipPosition = useCallback(() => {
     const actualPosition = imperativeOptions?.position ?? position
@@ -431,17 +287,17 @@ const Tooltip = ({
       handleComputedPosition(computedStylesData)
     })
   }, [
-    show,
-    activeAnchor,
-    content,
-    externalStyles,
-    place,
+    imperativeOptions?.position,
     imperativeOptions?.place,
+    position,
+    float,
+    activeAnchor,
+    place,
     offset,
     positionStrategy,
-    position,
-    imperativeOptions?.position,
-    float,
+    middlewares,
+    border,
+    handleTooltipPosition,
   ])
 
   useEffect(() => {
@@ -451,15 +307,172 @@ const Tooltip = ({
      *   - `handleMouseEvents()`
      *   - `handleGlobalCloseEvents()`
      *   - `handleAnchorEvents()`
-     *   - ?
+     *   - ...
      */
+
+    const handlePointerMove = (event?: Event) => {
+      if (!event) {
+        return
+      }
+      const mouseEvent = event as MouseEvent
+      const mousePosition = {
+        x: mouseEvent.clientX,
+        y: mouseEvent.clientY,
+      }
+      handleTooltipPosition(mousePosition)
+      lastFloatPosition.current = mousePosition
+    }
+
+    const handleClickOutsideAnchors = (event: MouseEvent) => {
+      if (!show) {
+        return
+      }
+      const target = event.target as HTMLElement
+      if (!target.isConnected) {
+        return
+      }
+      if (tooltipRef.current?.contains(target)) {
+        return
+      }
+      if (anchorElements.some((anchor) => anchor?.contains(target))) {
+        return
+      }
+      handleShow(false)
+      if (tooltipShowDelayTimerRef.current) {
+        clearTimeout(tooltipShowDelayTimerRef.current)
+      }
+    }
+
+    const handleShowTooltip = (event?: Event) => {
+      if (!event) {
+        return
+      }
+      const target = (event.currentTarget ?? event.target) as HTMLElement | null
+      if (!target?.isConnected) {
+        /**
+         * this happens when the target is removed from the DOM
+         * at the same time the tooltip gets triggered
+         */
+        setActiveAnchor(null)
+        return
+      }
+      if (delayShow) {
+        handleShowTooltipDelayed()
+      } else {
+        handleShow(true)
+      }
+      setActiveAnchor(target)
+
+      if (tooltipHideDelayTimerRef.current) {
+        clearTimeout(tooltipHideDelayTimerRef.current)
+      }
+    }
+
+    const handleHideTooltip = () => {
+      if (clickable) {
+        // allow time for the mouse to reach the tooltip, in case there's a gap
+        handleHideTooltipDelayed(delayHide || 100)
+      } else if (delayHide) {
+        handleHideTooltipDelayed()
+      } else {
+        handleShow(false)
+      }
+
+      if (tooltipShowDelayTimerRef.current) {
+        clearTimeout(tooltipShowDelayTimerRef.current)
+      }
+    }
+
+    // debounce handler to prevent call twice when
+    // mouse enter and focus events being triggered toggether
+    const internalDebouncedHandleShowTooltip = debounce(handleShowTooltip, 50, true)
+    const internalDebouncedHandleHideTooltip = debounce(handleHideTooltip, 50, true)
+    // If either of the functions is called while the other is still debounced,
+    // reset the timeout. Otherwise if there is a sub-50ms (leave A, enter B, leave B)
+    // sequence of events, the tooltip will stay open because the hide debounce
+    // from leave A prevented the leave B event from calling it, leaving the
+    // tooltip visible.
+    const debouncedHandleShowTooltip = (e?: Event) => {
+      internalDebouncedHandleHideTooltip.cancel()
+      internalDebouncedHandleShowTooltip(e)
+    }
+    const debouncedHandleHideTooltip = () => {
+      internalDebouncedHandleShowTooltip.cancel()
+      internalDebouncedHandleHideTooltip()
+    }
 
     const handleScrollResize = () => {
       handleShow(false)
     }
 
-    const anchorScrollParent = getScrollParent(activeAnchor)
+    const hasClickEvent =
+      openOnClick || openEvents?.click || openEvents?.dblclick || openEvents?.mousedown
+    const actualOpenEvents: AnchorOpenEvents = openEvents
+      ? { ...openEvents }
+      : {
+          mouseenter: true,
+          focus: true,
+          click: false,
+          dblclick: false,
+          mousedown: false,
+        }
+    if (!openEvents && openOnClick) {
+      Object.assign(actualOpenEvents, {
+        mouseenter: false,
+        focus: false,
+        click: true,
+      })
+    }
+    const actualCloseEvents: AnchorCloseEvents = closeEvents
+      ? { ...closeEvents }
+      : {
+          mouseleave: true,
+          blur: true,
+          click: false,
+          dblclick: false,
+          mouseup: false,
+        }
+    if (!closeEvents && openOnClick) {
+      Object.assign(actualCloseEvents, {
+        mouseleave: false,
+        blur: false,
+      })
+    }
+    const actualGlobalCloseEvents: GlobalCloseEvents = globalCloseEvents
+      ? { ...globalCloseEvents }
+      : {
+          escape: false,
+          scroll: false,
+          resize: false,
+          clickOutsideAnchor: hasClickEvent || false,
+        }
+
+    if (imperativeModeOnly) {
+      Object.assign(actualOpenEvents, {
+        mouseenter: false,
+        focus: false,
+        click: false,
+        dblclick: false,
+        mousedown: false,
+      })
+      Object.assign(actualCloseEvents, {
+        mouseleave: false,
+        blur: false,
+        click: false,
+        dblclick: false,
+        mouseup: false,
+      })
+      Object.assign(actualGlobalCloseEvents, {
+        escape: false,
+        scroll: false,
+        resize: false,
+        clickOutsideAnchor: false,
+      })
+    }
+
+    const tooltipElement = tooltipRef.current
     const tooltipScrollParent = getScrollParent(tooltipRef.current)
+    const anchorScrollParent = getScrollParent(activeAnchor)
 
     if (actualGlobalCloseEvents.scroll) {
       window.addEventListener('scroll', handleScrollResize)
@@ -567,8 +580,8 @@ const Tooltip = ({
     if (clickable && !hasClickEvent) {
       // used to keep the tooltip open when hovering content.
       // not needed if using click events.
-      tooltipRef.current?.addEventListener('mouseenter', handleMouseEnterTooltip)
-      tooltipRef.current?.addEventListener('mouseleave', handleMouseLeaveTooltip)
+      tooltipElement?.addEventListener('mouseenter', handleMouseEnterTooltip)
+      tooltipElement?.addEventListener('mouseleave', handleMouseLeaveTooltip)
     }
 
     enabledEvents.forEach(({ event, listener }) => {
@@ -595,8 +608,8 @@ const Tooltip = ({
         window.removeEventListener('keydown', handleEsc)
       }
       if (clickable && !hasClickEvent) {
-        tooltipRef.current?.removeEventListener('mouseenter', handleMouseEnterTooltip)
-        tooltipRef.current?.removeEventListener('mouseleave', handleMouseLeaveTooltip)
+        tooltipElement?.removeEventListener('mouseenter', handleMouseEnterTooltip)
+        tooltipElement?.removeEventListener('mouseleave', handleMouseLeaveTooltip)
       }
       enabledEvents.forEach(({ event, listener }) => {
         anchorElements.forEach((anchor) => {
@@ -610,16 +623,23 @@ const Tooltip = ({
      */
   }, [
     activeAnchor,
-    updateTooltipPosition,
-    rendered,
     anchorElements,
-    // the effect uses the `actual*Events` objects, but this should work
-    openEvents,
+    clickable,
     closeEvents,
-    globalCloseEvents,
-    hasClickEvent,
-    delayShow,
     delayHide,
+    delayShow,
+    float,
+    globalCloseEvents,
+    handleHideTooltipDelayed,
+    handleShow,
+    handleShowTooltipDelayed,
+    handleTooltipPosition,
+    imperativeModeOnly,
+    openEvents,
+    openOnClick,
+    setActiveAnchor,
+    show,
+    updateTooltipPosition,
   ])
 
   useEffect(() => {
@@ -749,7 +769,7 @@ const Tooltip = ({
     return () => {
       documentObserver.disconnect()
     }
-  }, [id, anchorSelect, imperativeOptions?.anchorSelect, activeAnchor])
+  }, [id, anchorSelect, imperativeOptions?.anchorSelect, activeAnchor, handleShow, setActiveAnchor])
 
   useEffect(() => {
     updateTooltipPosition()
@@ -766,7 +786,7 @@ const Tooltip = ({
     return () => {
       contentObserver.disconnect()
     }
-  }, [content, contentWrapperRef?.current])
+  }, [content, contentWrapperRef, updateTooltipPosition])
 
   useEffect(() => {
     if (!activeAnchor || !anchorElements.includes(activeAnchor)) {
@@ -777,7 +797,7 @@ const Tooltip = ({
        */
       setActiveAnchor(anchorElements[0] ?? null)
     }
-  }, [anchorElements, activeAnchor])
+  }, [anchorElements, activeAnchor, setActiveAnchor])
 
   useEffect(() => {
     if (defaultIsOpen) {
@@ -791,7 +811,7 @@ const Tooltip = ({
         clearTimeout(tooltipHideDelayTimerRef.current)
       }
     }
-  }, [])
+  }, [defaultIsOpen, handleShow])
 
   useEffect(() => {
     let selector = imperativeOptions?.anchorSelect ?? anchorSelect
@@ -815,7 +835,7 @@ const Tooltip = ({
       clearTimeout(tooltipShowDelayTimerRef.current)
       handleShowTooltipDelayed(delayShow)
     }
-  }, [delayShow])
+  }, [delayShow, handleShowTooltipDelayed])
 
   const actualContent = imperativeOptions?.content ?? content
   const canShow = show && Object.keys(computedPosition.tooltipStyles).length > 0
